@@ -1,0 +1,159 @@
+# Databricks Asset Bundle — quality gate como job.
+#
+#   databricks bundle validate
+#   databricks bundle deploy -t dev
+#   databricks bundle run prompt_quality_gate -t dev
+#
+# O impórtalo por la UI: Workflows → Create job, y pega los parámetros a mano.
+
+bundle:
+  name: python_qa_llmops
+
+variables:
+  catalog:
+    default: workspace
+  schema:
+    default: llmops
+  email:
+    default: lvcruzq@gmail.com
+  model_endpoint:
+    default: databricks-qwen35-122b-a10b
+  serving_endpoint_name:
+    default: qa-model-serving
+
+targets:
+  dev:
+    mode: production
+    default: true
+    workspace:
+      # If host is omitted, Databricks CLI uses DATABRICKS_HOST environment variable automatically.
+      root_path: /Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
+
+resources:
+  jobs:
+    prompt_quality_gate:
+      name: "LLMOps — quality gate (Python QA)"
+
+      # Free Edition: máx 5 tareas concurrentes por cuenta. Una basta.
+      max_concurrent_runs: 1
+
+      email_notifications:
+        on_failure:
+          - ${var.email}     # el gate en rojo llega aquí
+
+      parameters:
+        - name: catalog
+          default: ${var.catalog}
+        - name: schema
+          default: ${var.schema}
+        - name: prompt_alias
+          default: candidate
+        - name: eval_table
+          default: ${var.catalog}.${var.schema}.eval_python_qa
+        - name: promote_on_pass
+          default: "false"
+        - name: thresholds
+          default: '{"correctness": 0.8, "safety": 1.0, "answers_directly": 0.8, "has_code_block": 0.7}'
+          
+      environments:
+        - environment_key: default
+          spec:
+            environment_version: '2'
+
+    llmops_demo_loop:
+      name: "LLMOps — demo de clase (pipeline completo, python_qa)"
+
+      # Free Edition: máx 5 tareas concurrentes por cuenta.
+      max_concurrent_runs: 1
+
+      email_notifications:
+        on_failure:
+          - ${var.email}
+
+      # Nombres iguales a los widgets de los notebooks: Databricks los pasa
+      # automáticamente como valores de widget a cada tarea de notebook.
+      parameters:
+        - name: catalog
+          default: ${var.catalog}
+        - name: schema
+          default: ${var.schema}
+        - name: source_jsonl
+          # El bundle sincroniza este archivo junto a los notebooks; workspace.file_path
+          # es la carpeta donde caen los ficheros no-notebook del bundle.
+          default: "file:${workspace.file_path}/tune_data_stack_overflow_python_qa-05_18_07_2026.jsonl"
+        - name: model_endpoint
+          default: ${var.model_endpoint}
+        - name: thresholds
+          default: '{"correctness": 0.8, "safety": 1.0, "answers_directly": 0.8, "has_code_block": 0.7}'
+        - name: endpoint_name
+          default: ${var.serving_endpoint_name}
+
+      tasks:
+        - task_key: eval_baseline
+          notebook_task:
+            notebook_path: ./notebooks/01_eval_baseline.py
+          environment_key: default
+
+        - task_key: eval_candidate
+          depends_on:
+            - task_key: eval_baseline
+          notebook_task:
+            notebook_path: ./notebooks/02_eval_candidate.py
+          environment_key: default
+
+        - task_key: compare_and_gate
+          depends_on:
+            - task_key: eval_candidate
+          notebook_task:
+            notebook_path: ./notebooks/03_compare_and_gate.py
+          environment_key: default
+
+        # Condition task: bifurca el pipeline según lo que decidió compare_and_gate.
+        # Si el candidato no pasó el gate, el pipeline se detiene aquí a propósito
+        # (no se registra ni se despliega un modelo que no cumplió el umbral).
+        - task_key: gate_check
+          depends_on:
+            - task_key: compare_and_gate
+          condition_task:
+            op: EQUAL_TO
+            left: "{{tasks.compare_and_gate.values.gate_passed}}"
+            right: "true"
+
+        - task_key: register_model
+          depends_on:
+            - task_key: gate_check
+              outcome: "true"
+          notebook_task:
+            notebook_path: ./notebooks/04_register_model.py
+          environment_key: default
+
+        - task_key: deploy_serving_endpoint
+          depends_on:
+            - task_key: register_model
+          notebook_task:
+            notebook_path: ./notebooks/05_deploy_serving_endpoint.py
+          environment_key: default
+
+      environments:
+        - environment_key: default
+          spec:
+            environment_version: '2'
+
+  schemas:
+    qa_schema:
+      name: ${var.schema}
+      catalog_name: ${var.catalog}
+      comment: "Schema created by Databricks Asset Bundles"
+
+  experiments:
+    qa_experiment:
+      name: 
+
+  registered_models:
+    qa_model:
+      catalog_name: ${var.catalog}
+      schema_name: ${var.schema}
+      name: qa_model
+      comment: Registered model in Unity Catalog for ${bundle.target} deployment target
+
+      

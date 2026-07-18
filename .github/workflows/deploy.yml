@@ -1,0 +1,32 @@
+name: Deploy Databricks Asset Bundle
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Validate and Deploy Bundle
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Setup the Databricks CLI on the runner
+      - name: Setup Databricks CLI
+        uses: databricks/setup-cli@main
+
+      # Validate bundle configuration
+      - name: Validate Asset Bundle
+        run: databricks bundle validate --target dev
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+
+      # Deploy bundle to Databricks workspace
+      - name: Deploy Asset Bundle
+        run: databricks bundle deploy --target dev
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
