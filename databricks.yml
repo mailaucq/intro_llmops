@@ -13,7 +13,7 @@ variables:
   catalog:
     default: workspace
   schema:
-    default: llmops
+    default: llmopst
   email:
     default: lvcruzq@gmail.com
   model_endpoint:
@@ -87,6 +87,8 @@ resources:
           default: '{"correctness": 0.8, "safety": 1.0, "answers_directly": 0.8, "has_code_block": 0.7}'
         - name: endpoint_name
           default: ${var.serving_endpoint_name}
+        - name: rate_limit_per_minute
+          default: "20"
 
       tasks:
         - task_key: eval_baseline
@@ -147,7 +149,7 @@ resources:
 
   experiments:
     qa_experiment:
-      name: 
+      name: /Users/${workspace.current_user.userName}/python_qa_llmops
 
   registered_models:
     qa_model:
