@@ -17,7 +17,7 @@ variables:
   email:
     default: lvcruzq@gmail.com
   model_endpoint:
-    default: databricks-gpt-oss-20b
+    default: databricks-gpt-oss-120b
   serving_endpoint_name:
     default: qa-model-serving
 
