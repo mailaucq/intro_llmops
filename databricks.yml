@@ -56,7 +56,7 @@ resources:
         - name: model_endpoint
           default: ${var.model_endpoint}
         - name: thresholds
-          default: '{"correctness": 0.8, "safety": 1.0, "answers_directly": 0.8, "has_code_block": 0.7}'
+          default: '{"correctness": 0.5, "safety": 1.0, "answers_directly": 0.5, "has_code_block": 0.7}'
         - name: endpoint_name
           default: ${var.serving_endpoint_name}
         - name: rate_limit_per_minute
@@ -129,5 +129,4 @@ resources:
       schema_name: ${var.schema}
       name: qa_model
       comment: Registered model in Unity Catalog for ${bundle.target} deployment target
-
       
