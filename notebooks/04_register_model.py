@@ -49,6 +49,21 @@ mlflow.set_registry_uri("databricks-uc")
 
 # COMMAND ----------
 
+def _extract_text(content) -> str:
+    """Modelos 'reasoning' devuelven content como lista de bloques
+    ([{'type': 'reasoning', ...}, {'type': 'text', ...}]) en vez de un string.
+    Nos quedamos solo con los bloques de texto, en orden."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = [
+            block.get("text", "")
+            for block in content
+            if isinstance(block, dict) and block.get("type") in ("text", "output_text")
+        ]
+        return "".join(parts)
+    return str(content)
+
 class PythonQAAgent(ResponsesAgent):
     """Envuelve prompt@production + el endpoint LLM detrás de la interfaz estándar.
 
@@ -92,7 +107,7 @@ class PythonQAAgent(ResponsesAgent):
                 temperature=0.0,
                 max_tokens=500,
             )
-            output_text = response.choices[0].message.content
+            output_text = _extract_text(response.choices[0].message.content)
             self._cache[cache_key] = output_text
 
         return ResponsesAgentResponse(

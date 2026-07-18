@@ -87,6 +87,21 @@ print(f"{len(eval_data)} ejemplos de evaluación")
 
 semaphore = threading.Semaphore(2)
 
+def _extract_text(content) -> str:
+    """Modelos 'reasoning' devuelven content como lista de bloques
+    ([{'type': 'reasoning', ...}, {'type': 'text', ...}]) en vez de un string.
+    Nos quedamos solo con los bloques de texto, en orden."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = [
+            block.get("text", "")
+            for block in content
+            if isinstance(block, dict) and block.get("type") in ("text", "output_text")
+        ]
+        return "".join(parts)
+    return str(content)
+
 @mlflow.trace(span_type="CHAIN")
 def python_qa(question: str) -> str:
     prompt = mlflow.genai.load_prompt(f"prompts:/{PROMPT_NAME}@champion")
@@ -99,7 +114,7 @@ def python_qa(question: str) -> str:
             max_tokens=500,
         )
         time.sleep(0.2)
-    return response.choices[0].message.content
+    return _extract_text(response.choices[0].message.content)
 
 # COMMAND ----------
 
