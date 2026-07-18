@@ -114,7 +114,7 @@ else:
     print(f"Creando {ENDPOINT_NAME} -> {UC_MODEL_NAME} v{MODEL_VERSION}")
     w.serving_endpoints.create_and_wait(
         name=ENDPOINT_NAME,
-        config=EndpointCoreConfigInput(served_entities=served_entities),
+        config=EndpointCoreConfigInput(name=ENDPOINT_NAME, served_entities=served_entities),
     )
 
 w.serving_endpoints.put_ai_gateway(
