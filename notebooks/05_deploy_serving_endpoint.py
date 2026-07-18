@@ -9,19 +9,41 @@
 
 # COMMAND ----------
 
+# MAGIC %pip install -q --upgrade "mlflow[databricks]>=3.1.0" openai databricks-sdk
+
+# COMMAND ----------
+
+dbutils.library.restartPython()
+
+# COMMAND ----------
+
+
 dbutils.widgets.text("catalog", "workspace")
 dbutils.widgets.text("schema", "llmops")
 dbutils.widgets.text("endpoint_name", "qa-model-serving")
+dbutils.widgets.text("rate_limit_per_minute", "20")
 
 # COMMAND ----------
 
 from databricks.sdk import WorkspaceClient
-from databricks.sdk.service.serving import EndpointCoreConfigInput, ServedEntityInput
 from databricks.sdk.errors import ResourceDoesNotExist
+from databricks.sdk.service.serving import (
+    AiGatewayGuardrailParameters,
+    AiGatewayGuardrailPiiBehavior,
+    AiGatewayGuardrailPiiBehaviorBehavior,
+    AiGatewayGuardrails,
+    AiGatewayRateLimit,
+    AiGatewayRateLimitKey,
+    AiGatewayRateLimitRenewalPeriod,
+    AiGatewayUsageTrackingConfig,
+    EndpointCoreConfigInput,
+    ServedEntityInput,
+)
 
 CATALOG = dbutils.widgets.get("catalog")
 SCHEMA = dbutils.widgets.get("schema")
 ENDPOINT_NAME = dbutils.widgets.get("endpoint_name")
+RATE_LIMIT_PER_MINUTE = int(dbutils.widgets.get("rate_limit_per_minute"))
 UC_MODEL_NAME = f"{CATALOG}.{SCHEMA}.qa_model"
 
 MODEL_VERSION = dbutils.jobs.taskValues.get(
@@ -41,6 +63,44 @@ served_entities = [
 
 # COMMAND ----------
 
+# MAGIC %md ### AI Gateway — guardrails, rate limit, usage tracking
+# MAGIC
+# MAGIC - **Guardrails**: filtro en tiempo real, aparte del scorer `Safety` del eval
+# MAGIC   (ese solo mide en el momento de evaluar, no protege tráfico real). `pii`
+# MAGIC   enmascara datos personales; `safety` bloquea contenido inseguro;
+# MAGIC   `invalid_keywords` corta intentos comunes de prompt injection / jailbreak
+# MAGIC   antes de que lleguen al modelo.
+# MAGIC - **Rate limit**: protege la cuota de Free Edition — sin esto, un loop
+# MAGIC   accidental en el cliente puede agotar el compute del día.
+# MAGIC - **Usage tracking**: activa la inference table del endpoint (cada
+# MAGIC   request/response queda logueado), base para monitoreo en producción.
+
+# COMMAND ----------
+
+guardrails = AiGatewayGuardrails(
+    input=AiGatewayGuardrailParameters(
+        safety=True,
+        pii=AiGatewayGuardrailPiiBehavior(behavior=AiGatewayGuardrailPiiBehaviorBehavior.BLOCK),
+        invalid_keywords=["ignore previous instructions", "ignore all previous instructions", "jailbreak"],
+    ),
+    output=AiGatewayGuardrailParameters(
+        safety=True,
+        pii=AiGatewayGuardrailPiiBehavior(behavior=AiGatewayGuardrailPiiBehaviorBehavior.BLOCK),
+    ),
+)
+
+rate_limits = [
+    AiGatewayRateLimit(
+        calls=RATE_LIMIT_PER_MINUTE,
+        key=AiGatewayRateLimitKey.ENDPOINT,
+        renewal_period=AiGatewayRateLimitRenewalPeriod.MINUTE,
+    )
+]
+
+usage_tracking_config = AiGatewayUsageTrackingConfig(enabled=True)
+
+# COMMAND ----------
+
 try:
     w.serving_endpoints.get(ENDPOINT_NAME)
     exists = True
@@ -57,4 +117,11 @@ else:
         config=EndpointCoreConfigInput(served_entities=served_entities),
     )
 
-print(f"Endpoint listo: {ENDPOINT_NAME}")
+w.serving_endpoints.put_ai_gateway(
+    name=ENDPOINT_NAME,
+    guardrails=guardrails,
+    rate_limits=rate_limits,
+    usage_tracking_config=usage_tracking_config,
+)
+
+print(f"Endpoint listo con guardrails + rate limit ({RATE_LIMIT_PER_MINUTE}/min) + usage tracking: {ENDPOINT_NAME}")

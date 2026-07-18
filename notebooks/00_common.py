@@ -98,7 +98,7 @@ def python_qa(question: str) -> str:
             temperature=0.0,
             max_tokens=500,
         )
-        time.sleep(1)
+        time.sleep(0.2)
     return response.choices[0].message.content
 
 # COMMAND ----------

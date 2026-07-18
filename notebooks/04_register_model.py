@@ -50,20 +50,27 @@ mlflow.set_registry_uri("databricks-uc")
 # COMMAND ----------
 
 class PythonQAAgent(ResponsesAgent):
-    """Envuelve prompt@production + el endpoint LLM detrás de la interfaz estándar."""
+    """Envuelve prompt@production + el endpoint LLM detrás de la interfaz estándar.
+
+    Cache exact-match en memoria: mismo texto de pregunta -> misma respuesta,
+    sin volver a llamar al LLM. Vive por réplica del serving endpoint, se
+    pierde en cada redeploy/restart/scale-to-zero; para que persista entre
+    réplicas habría que respaldarlo en una tabla Delta en vez de un dict.
+    """
 
     def __init__(self, model_endpoint: str, prompt_name: str, prompt_alias: str = "production"):
         self.model_endpoint = model_endpoint
         self.prompt_name = prompt_name
         self.prompt_alias = prompt_alias
+        self._cache: dict[str, str] = {}
+
+    def _cache_key(self, question: str) -> str:
+        import hashlib
+        return hashlib.sha256(f"{self.prompt_alias}:{question}".encode()).hexdigest()
 
     def predict(self, request: ResponsesAgentRequest) -> ResponsesAgentResponse:
         import mlflow.genai
         from databricks.sdk import WorkspaceClient
-
-        w = WorkspaceClient()
-        llm = w.serving_endpoints.get_open_ai_client()
-        prompt = mlflow.genai.load_prompt(f"prompts:/{self.prompt_name}@{self.prompt_alias}")
 
         question = request.input[-1].content
         if isinstance(question, list):
@@ -71,14 +78,22 @@ class PythonQAAgent(ResponsesAgent):
                 part.get("text", "") for part in question if isinstance(part, dict)
             )
 
-        messages = prompt.format(question=question)
-        response = llm.chat.completions.create(
-            model=self.model_endpoint,
-            messages=messages,
-            temperature=0.0,
-            max_tokens=500,
-        )
-        output_text = response.choices[0].message.content
+        cache_key = self._cache_key(question)
+        output_text = self._cache.get(cache_key)
+
+        if output_text is None:
+            w = WorkspaceClient()
+            llm = w.serving_endpoints.get_open_ai_client()
+            prompt = mlflow.genai.load_prompt(f"prompts:/{self.prompt_name}@{self.prompt_alias}")
+            messages = prompt.format(question=question)
+            response = llm.chat.completions.create(
+                model=self.model_endpoint,
+                messages=messages,
+                temperature=0.0,
+                max_tokens=500,
+            )
+            output_text = response.choices[0].message.content
+            self._cache[cache_key] = output_text
 
         return ResponsesAgentResponse(
             output=[self.create_text_output_item(text=output_text, id=str(uuid.uuid4()))]

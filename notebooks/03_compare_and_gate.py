@@ -13,6 +13,14 @@
 
 # COMMAND ----------
 
+# MAGIC %pip install -q --upgrade "mlflow[databricks]>=3.1.0" openai
+
+# COMMAND ----------
+
+dbutils.library.restartPython()
+
+# COMMAND ----------
+
 dbutils.widgets.text("catalog", "workspace")
 dbutils.widgets.text("schema", "llmops")
 dbutils.widgets.text(
