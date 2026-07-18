@@ -24,7 +24,7 @@ from mlflow.genai.scorers import Correctness, Guidelines, RelevanceToQuery, Safe
 spark.sql(f"CREATE SCHEMA IF NOT EXISTS {CATALOG}.{SCHEMA}")
 
 PROMPT_NAME = f"{CATALOG}.{SCHEMA}.python_qa"
-JUDGE_MODEL = f"endpoints:/{MODEL_ENDPOINT}"
+JUDGE_MODEL = "databricks-qwen35-122b-a10b"
 
 w = WorkspaceClient()
 llm = w.serving_endpoints.get_open_ai_client()
