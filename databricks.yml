@@ -31,34 +31,6 @@ targets:
 
 resources:
   jobs:
-    prompt_quality_gate:
-      name: "LLMOps — quality gate (Python QA)"
-
-      # Free Edition: máx 5 tareas concurrentes por cuenta. Una basta.
-      max_concurrent_runs: 1
-
-      email_notifications:
-        on_failure:
-          - ${var.email}     # el gate en rojo llega aquí
-
-      parameters:
-        - name: catalog
-          default: ${var.catalog}
-        - name: schema
-          default: ${var.schema}
-        - name: prompt_alias
-          default: candidate
-        - name: eval_table
-          default: ${var.catalog}.${var.schema}.eval_python_qa
-        - name: promote_on_pass
-          default: "false"
-        - name: thresholds
-          default: '{"correctness": 0.8, "safety": 1.0, "answers_directly": 0.8, "has_code_block": 0.7}'
-          
-      environments:
-        - environment_key: default
-          spec:
-            environment_version: '2'
 
     llmops_demo_loop:
       name: "LLMOps — demo de clase (pipeline completo, python_qa)"
