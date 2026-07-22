@@ -117,11 +117,24 @@ else:
         config=EndpointCoreConfigInput(name=ENDPOINT_NAME, served_entities=served_entities),
     )
 
-w.serving_endpoints.put_ai_gateway(
-    name=ENDPOINT_NAME,
-    guardrails=guardrails,
-    rate_limits=rate_limits,
-    usage_tracking_config=usage_tracking_config,
-)
-
-print(f"Endpoint listo con guardrails + rate limit ({RATE_LIMIT_PER_MINUTE}/min) + usage tracking: {ENDPOINT_NAME}")
+try:
+    w.serving_endpoints.put_ai_gateway(
+        name=ENDPOINT_NAME,
+        guardrails=guardrails,
+        rate_limits=rate_limits,
+        usage_tracking_config=usage_tracking_config,
+    )
+    print(f"Endpoint listo con guardrails + rate limit ({RATE_LIMIT_PER_MINUTE}/min) + usage tracking: {ENDPOINT_NAME}")
+except Exception as e:  # noqa: BLE001
+    # Usage tracking (inference tables) no está soportado para todos los tipos
+    # de endpoint en todos los workspaces (p.ej. Free Edition). Que falte esa
+    # feature no debería tumbar guardrails + rate limit, que sí son críticos.
+    if "usage tracking" in str(e).lower():
+        w.serving_endpoints.put_ai_gateway(
+            name=ENDPOINT_NAME,
+            guardrails=guardrails,
+            rate_limits=rate_limits,
+        )
+        print(f"Endpoint listo con guardrails + rate limit ({RATE_LIMIT_PER_MINUTE}/min). Usage tracking no soportado en este workspace, se omitió: {ENDPOINT_NAME}")
+    else:
+        raise
