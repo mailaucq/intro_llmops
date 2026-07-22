@@ -51,13 +51,18 @@ MODEL_VERSION = dbutils.jobs.taskValues.get(
 )
 
 w = WorkspaceClient()
-
+resp = w.tokens.create(comment="token-for-one-day", lifetime_seconds=86400)
+token = resp.token_value
 served_entities = [
     ServedEntityInput(
         entity_name=UC_MODEL_NAME,
         entity_version=str(MODEL_VERSION),
         workload_size="Small",
         scale_to_zero_enabled=True,
+        environment_vars={
+            "DATABRICKS_HOST": w.config.host,
+            "DATABRICKS_TOKEN": token
+        }
     )
 ]
 
