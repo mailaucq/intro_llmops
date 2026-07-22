@@ -89,9 +89,11 @@ class PythonQAAgent(ResponsesAgent):
         return hashlib.sha256(f"{self.prompt_alias}:{question}".encode()).hexdigest()
 
     def predict(self, request: ResponsesAgentRequest) -> ResponsesAgentResponse:
+        import mlflow
         import mlflow.genai
         from databricks.sdk import WorkspaceClient
 
+        mlflow.set_registry_uri("databricks-uc")
         question = request.input[-1].content
         if isinstance(question, list):
             question = "".join(
