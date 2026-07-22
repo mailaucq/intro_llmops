@@ -28,11 +28,16 @@ dbutils.widgets.text("model_endpoint", "databricks-qwen35-122b-a10b")
 # COMMAND ----------
 
 import uuid
+from typing import Generator
 
 import mlflow
 from mlflow.models.resources import DatabricksServingEndpoint
 from mlflow.pyfunc import ResponsesAgent
-from mlflow.types.responses import ResponsesAgentRequest, ResponsesAgentResponse
+from mlflow.types.responses import (
+    ResponsesAgentRequest,
+    ResponsesAgentResponse,
+    ResponsesAgentStreamEvent,
+)
 
 CATALOG = dbutils.widgets.get("catalog")
 SCHEMA = dbutils.widgets.get("schema")
@@ -113,6 +118,18 @@ class PythonQAAgent(ResponsesAgent):
         return ResponsesAgentResponse(
             output=[self.create_text_output_item(text=output_text, id=str(uuid.uuid4()))]
         )
+
+    def predict_stream(
+        self, request: ResponsesAgentRequest
+    ) -> Generator[ResponsesAgentStreamEvent, None, None]:
+        """Sin token-streaming real desde el LLM subyacente (una sola llamada
+        bloqueante a chat.completions.create, reusada por el cache). Se emite
+        la respuesta completa como un único evento para que el endpoint no
+        falle cuando lo consultan con stream=True (p.ej. el tester de
+        Databricks Model Serving)."""
+        response = self.predict(request)
+        for item in response.output:
+            yield ResponsesAgentStreamEvent(type="response.output_item.done", item=item)
 
 # COMMAND ----------
 
