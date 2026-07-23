@@ -94,6 +94,7 @@ class PythonQAAgent(ResponsesAgent):
         from databricks.sdk import WorkspaceClient
 
         mlflow.set_registry_uri("databricks-uc")
+        mlflow.openai.autolog()
         question = request.input[-1].content
         if isinstance(question, list):
             question = "".join(
