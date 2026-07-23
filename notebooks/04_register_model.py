@@ -95,6 +95,7 @@ class PythonQAAgent(ResponsesAgent):
 
         mlflow.set_registry_uri("databricks-uc")
         mlflow.openai.autolog()
+        mlflow.set_tracking_uri("databricks")
         question = request.input[-1].content
         if isinstance(question, list):
             question = "".join(
