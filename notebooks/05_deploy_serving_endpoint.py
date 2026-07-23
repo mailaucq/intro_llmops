@@ -25,6 +25,7 @@ dbutils.widgets.text("rate_limit_per_minute", "20")
 
 # COMMAND ----------
 
+import mlflow
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.errors import ResourceDoesNotExist
 from databricks.sdk.service.serving import (
@@ -52,6 +53,8 @@ MODEL_VERSION = dbutils.jobs.taskValues.get(
 
 w = WorkspaceClient()
 resp = w.tokens.create(comment="token-for-one-day", lifetime_seconds=86400)
+experiment = mlflow.get_experiment_by_name(f"/Users/{w.current_user.me().user_name}/python_qa_llmops")
+experiment_id = experiment.experiment_id
 token = resp.token_value
 served_entities = [
     ServedEntityInput(
@@ -61,7 +64,9 @@ served_entities = [
         scale_to_zero_enabled=True,
         environment_vars={
             "DATABRICKS_HOST": w.config.host,
-            "DATABRICKS_TOKEN": token
+            "DATABRICKS_TOKEN": token,
+            "MLFLOW_EXPERIMENT_ID": experiment_id,
+            "ENABLE_MLFLOW_TRACING": "true"
         }
     )
 ]
